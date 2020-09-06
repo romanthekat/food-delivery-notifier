@@ -7,6 +7,10 @@ import (
 	"syscall"
 )
 
+type App struct {
+	activeDelivery Delivery
+}
+
 func newApp() *App {
 	//TODO replace with fyne dialog for user/password if needed
 	username, usernameFound := syscall.Getenv("FDN_USERNAME")
@@ -24,19 +28,10 @@ func newApp() *App {
 	return &App{activeDelivery: delivery}
 }
 
-type App struct {
-	activeDelivery Delivery
-}
-
 func (app *App) refresh() {
 	orderStatus, err := app.activeDelivery.RefreshOrderStatus()
 	if err != nil {
-		errorText := err.Error()
-		if len(errorText) > 16 {
-			errorText = errorText[0:15]
-		}
-
-		systray.SetTitle(errorText)
+		app.showError(err.Error())
 	}
 
 	switch orderStatus {
@@ -57,8 +52,12 @@ func (app *App) quit() {
 	systray.Quit()
 }
 
-func (app *App) setIcon(icon string) {
-	systray.SetIcon(getIcon(icon))
+func (app *App) showError(error string) {
+	if len(error) > 16 {
+		error = error[0:15]
+	}
+
+	systray.SetTitle(error)
 }
 
 func (app *App) orderCreated() {
@@ -87,6 +86,10 @@ func (app *App) setBlackIcon() {
 
 func (app *App) setWhiteIcon() {
 	app.setIcon("icons/bag/white.png")
+}
+
+func (app *App) setIcon(icon string) {
+	systray.SetIcon(getIcon(icon))
 }
 
 func getIcon(s string) []byte {

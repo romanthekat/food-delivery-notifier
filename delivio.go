@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -15,11 +14,11 @@ import (
 type Delivio struct {
 	accessToken  string
 	refreshToken string
-	client       *Client
+	client       *HttpClient
 }
 
 func NewDelivio(username, password string) (Delivery, error) {
-	client := NewClient("https://delivio.by")
+	client := NewHttpClient("https://delivio.by")
 	response, err := client.Login(context.Background(), &Login{
 		Phone:    username,
 		Password: password,
@@ -30,13 +29,13 @@ func NewDelivio(username, password string) (Delivery, error) {
 
 	fmt.Printf("login response: %+v\n", response)
 
-	return &Delivio{client: client,
-		accessToken: response.AccessToken, refreshToken: response.RefreshToken}, nil
+	return &Delivio{response.AccessToken, response.RefreshToken, client}, nil
 }
 
 func (d Delivio) RefreshOrderStatus() (OrderStatus, error) {
 	var activeOrder *ActiveOrder
 
+	//TODO 1. ugly 2. support re-login sequence once credentials dialog added if refresh token expired
 	for {
 		order, err := d.GetActiveOrder(context.Background())
 		if err != nil {
@@ -87,7 +86,17 @@ type ActiveOrder struct {
 	Status int    `json:"status"`
 }
 
-func (c *Client) Login(ctx context.Context, login *Login) (*LoginResponse, error) {
+type Login struct {
+	Phone    string `json:"phone"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	AccessToken  string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+func (c *HttpClient) Login(ctx context.Context, login *Login) (*LoginResponse, error) {
 	jsonBytes, err := json.Marshal(login)
 	if err != nil {
 		return nil, err
@@ -108,7 +117,7 @@ func (c *Client) Login(ctx context.Context, login *Login) (*LoginResponse, error
 	return &res, nil
 }
 
-func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (*LoginResponse, error) {
+func (c *HttpClient) RefreshToken(ctx context.Context, refreshToken string) (*LoginResponse, error) {
 	form := url.Values{}
 	form.Add("refresh_token", refreshToken)
 
@@ -151,17 +160,17 @@ func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	case 1:
 		return &res.Orders[0], nil
 	default:
-		return nil, errors.New(fmt.Sprintf("multiple active orders found %+v", res))
+		return nil, fmt.Errorf("multiple active orders found %+v", res)
 	}
 }
 
-type Client struct {
+type HttpClient struct {
 	baseUrl string
 	client  *http.Client
 }
 
-func NewClient(baseUrl string) *Client {
-	return &Client{
+func NewHttpClient(baseUrl string) *HttpClient {
+	return &HttpClient{
 		baseUrl: baseUrl,
 		client: &http.Client{
 			Timeout: time.Minute,
@@ -178,17 +187,7 @@ func (e errorResponse) Error() string {
 	return fmt.Sprintf("code: %v, message: %v", e.Code, e.Message)
 }
 
-type Login struct {
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
-}
-
-type LoginResponse struct {
-	AccessToken  string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
-}
-
-func (c *Client) sendRequest(req *http.Request, accessToken string, v interface{}) error {
+func (c *HttpClient) sendRequest(req *http.Request, accessToken string, body interface{}) error {
 	if len(req.Header.Get("Content-Type")) == 0 {
 		req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
@@ -207,8 +206,8 @@ func (c *Client) sendRequest(req *http.Request, accessToken string, v interface{
 	if res.StatusCode != http.StatusOK {
 		var errRes errorResponse
 		if err = json.NewDecoder(res.Body).Decode(&errRes); err == nil {
-			return errors.New(fmt.Sprintf("error code: %v, message: %s",
-				errRes.Code, errRes.Message))
+			return fmt.Errorf("error code: %body, message: %s",
+				errRes.Code, errRes.Message)
 		}
 
 		return errorResponse{
@@ -217,7 +216,7 @@ func (c *Client) sendRequest(req *http.Request, accessToken string, v interface{
 		}
 	}
 
-	if err = json.NewDecoder(res.Body).Decode(&v); err != nil {
+	if err = json.NewDecoder(res.Body).Decode(&body); err != nil {
 		return err
 	}
 
