@@ -1,3 +1,13 @@
+## Generic
+.DS_Store
+.idea
+
+## Nim
+nimcache/
+nimblecache/
+htmldocs/
+
+## Go
 # Binaries for programs and plugins
 *.exe
 *.exe~

@@ -1,0 +1,21 @@
+= food-delivery-notifier
+:hardbreaks:
+
+image::icons/bag/red.png[Food Delivery Notifier,64,64,align="center"]
+
+Tracks food delivery status, shows icon in status tray.
+
+== Screenshots
+
+image::examples/1.png[128,128,float="left"]
+image::examples/2.png[128,128,float="left"]
+image::examples/3.png[128,128]
+
+== Supported services
+TBD
+
+== Build
+
+`go build github.com/EvilKhaosKat/food-delivery-notifier`
+or
+`go install github.com/EvilKhaosKat/food-delivery-notifier`
