@@ -11,6 +11,7 @@ const (
 	noOrder OrderStatus = iota
 	orderCreated
 	orderCooking
+	orderWaitingForDelivery
 	orderDelivery
 )
 
