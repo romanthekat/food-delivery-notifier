@@ -31,14 +31,6 @@ func (app *App) onReady() {
 	mRefresh := systray.AddMenuItem("Refresh order status", "Refresh order status")
 	systray.AddSeparator()
 
-	//test purposes only
-	mRed := systray.AddMenuItem("Red", "")
-	mGreen := systray.AddMenuItem("Green", "")
-	mYellow := systray.AddMenuItem("Yellow", "")
-	mBlack := systray.AddMenuItem("Black", "")
-	mWhite := systray.AddMenuItem("White", "")
-	systray.AddSeparator()
-
 	mQuit := systray.AddMenuItem("Quit", "Quit the whole app")
 
 	refreshTicker := time.NewTicker(60 * time.Second)
@@ -51,17 +43,6 @@ func (app *App) onReady() {
 
 			case <-refreshTicker.C:
 				app.refresh()
-
-			case <-mRed.ClickedCh:
-				app.orderCreated()
-			case <-mGreen.ClickedCh:
-				app.orderDelivery()
-			case <-mYellow.ClickedCh:
-				app.orderCooking()
-			case <-mBlack.ClickedCh:
-				app.setBlackIcon()
-			case <-mWhite.ClickedCh:
-				app.setWhiteIcon()
 
 			case <-mQuit.ClickedCh:
 				app.quit()
