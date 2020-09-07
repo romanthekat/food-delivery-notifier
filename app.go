@@ -41,6 +41,8 @@ func (app *App) refresh() {
 		app.orderCreated()
 	case orderCooking:
 		app.orderCooking()
+	case orderWaitingForDelivery:
+		app.orderWaitingForDelivery()
 	case orderDelivery:
 		app.orderDelivery()
 	default:
@@ -68,6 +70,11 @@ func (app *App) orderCreated() {
 func (app *App) orderCooking() {
 	systray.SetTooltip("cooking")
 	app.setIcon("icons/bag/yellow.png")
+}
+
+func (app *App) orderWaitingForDelivery() {
+	systray.SetTooltip("waiting for delivery")
+	app.setIcon("icons/bag/yellow-green.png")
 }
 
 func (app *App) orderDelivery() {

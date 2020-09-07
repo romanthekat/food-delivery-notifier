@@ -69,6 +69,8 @@ func (d Delivio) RefreshOrderStatus() (OrderStatus, error) {
 		return orderCreated, nil
 	case 4:
 		return orderCooking, nil
+	case 16:
+		return orderWaitingForDelivery, nil
 	case 12:
 		return orderDelivery, nil
 	default:
@@ -81,7 +83,7 @@ type Orders struct {
 }
 
 type ActiveOrder struct {
-	Id     string `json:"id"`
+	Id     int    `json:"id"`
 	Uuid   string `json:"uuid"`
 	Status int    `json:"status"`
 }
