@@ -40,10 +40,10 @@ func (d Delivio) RefreshOrderStatus() (OrderStatus, error) {
 		order, err := d.GetActiveOrder(context.Background())
 		if err != nil {
 			if response, ok := err.(errorResponse); ok {
-				if response.Code == http.StatusUnauthorized {
+				if response.HttpCode == http.StatusUnauthorized {
 					tokens, err := d.client.RefreshToken(context.Background(), d.refreshToken)
 					if err != nil {
-						fmt.Printf("error during refreshing token: %s", err)
+						fmt.Printf("error during refreshing token: %s\n", err)
 						return noOrder, err
 					}
 
@@ -51,7 +51,7 @@ func (d Delivio) RefreshOrderStatus() (OrderStatus, error) {
 					d.refreshToken = tokens.RefreshToken
 				}
 			} else {
-				fmt.Printf("error during getting active order: %s", err)
+				fmt.Printf("error during getting active order: %s\n", err)
 				return noOrder, err
 			}
 		}
@@ -181,8 +181,9 @@ func NewHttpClient(baseUrl string) *HttpClient {
 }
 
 type errorResponse struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	HttpCode int
+	Code     int    `json:"code"`
+	Message  string `json:"message"`
 }
 
 func (e errorResponse) Error() string {
@@ -208,13 +209,14 @@ func (c *HttpClient) sendRequest(req *http.Request, accessToken string, body int
 	if res.StatusCode != http.StatusOK {
 		var errRes errorResponse
 		if err = json.NewDecoder(res.Body).Decode(&errRes); err == nil {
-			return fmt.Errorf("error code: %body, message: %s",
-				errRes.Code, errRes.Message)
+			errRes.HttpCode = res.StatusCode
+			return errRes
 		}
 
 		return errorResponse{
-			Code:    res.StatusCode,
-			Message: "unknown error",
+			HttpCode: res.StatusCode,
+			Code:     res.StatusCode,
+			Message:  "unknown error",
 		}
 	}
 
