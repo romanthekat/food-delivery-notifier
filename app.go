@@ -64,26 +64,31 @@ func (app *App) showError(error string) {
 
 func (app *App) orderCreated() {
 	systray.SetTooltip("order created")
+	systray.SetTitle("")
 	app.setIcon("icons/bag/red.png")
 }
 
 func (app *App) orderCooking() {
 	systray.SetTooltip("cooking")
+	systray.SetTitle("")
 	app.setIcon("icons/bag/yellow.png")
 }
 
 func (app *App) orderWaitingForDelivery() {
 	systray.SetTooltip("waiting for delivery")
+	systray.SetTitle("")
 	app.setIcon("icons/bag/yellow-green.png")
 }
 
 func (app *App) orderDelivery() {
 	systray.SetTooltip("in delivery")
+	systray.SetTitle("")
 	app.setIcon("icons/bag/green.png")
 }
 
 func (app *App) noOrder() {
 	systray.SetTooltip("no active order")
+	systray.SetTitle("")
 	app.setWhiteIcon()
 }
 
