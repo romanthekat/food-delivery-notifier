@@ -28,7 +28,7 @@ func (app *App) onReady() {
 	app.noOrder()
 	app.refresh()
 
-	mRefresh := systray.AddMenuItem("Refresh order status", "Refresh order status")
+	mRefresh := systray.AddMenuItem("Refresh", "Refresh order status")
 	systray.AddSeparator()
 
 	mQuit := systray.AddMenuItem("Quit", "Quit the whole app")
@@ -47,7 +47,6 @@ func (app *App) onReady() {
 			case <-mQuit.ClickedCh:
 				app.quit()
 			}
-
 		}
 	}()
 }
