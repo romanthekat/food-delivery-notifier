@@ -38,26 +38,26 @@ func (d Delivio) RefreshOrderStatus() (OrderStatus, error) {
 	//TODO 1. ugly 2. support re-login sequence once credentials dialog added if refresh token expired
 	for {
 		order, err := d.GetActiveOrder(context.Background())
-		if err != nil {
-			if response, ok := err.(errorResponse); ok {
-				if response.HttpCode == http.StatusUnauthorized {
-					tokens, err := d.client.RefreshToken(context.Background(), d.refreshToken)
-					if err != nil {
-						fmt.Printf("error during refreshing token: %s\n", err)
-						return noOrder, err
-					}
-
-					d.accessToken = tokens.AccessToken
-					d.refreshToken = tokens.RefreshToken
-				}
-			} else {
-				fmt.Printf("error during getting active order: %s\n", err)
-				return noOrder, err
-			}
+		if err == nil {
+			activeOrder = order
+			break
 		}
 
-		activeOrder = order
-		break
+		if response, ok := err.(errorResponse); ok {
+			if response.HttpCode == http.StatusUnauthorized {
+				tokens, err := d.client.RefreshToken(context.Background(), d.refreshToken)
+				if err != nil {
+					fmt.Printf("error during refreshing token: %s\n", err)
+					return noOrder, err
+				}
+
+				d.accessToken = tokens.AccessToken
+				d.refreshToken = tokens.RefreshToken
+			}
+		} else {
+			fmt.Printf("error during getting active order: %s\n", err)
+			return noOrder, err
+		}
 	}
 
 	if activeOrder == nil {
