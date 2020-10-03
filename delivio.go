@@ -35,7 +35,7 @@ func NewDelivio(username, password string) (Delivery, error) {
 func (d Delivio) RefreshOrderStatus() (OrderStatus, error) {
 	var activeOrder *ActiveOrder
 
-	//TODO 1. ugly 2. support re-login sequence once credentials dialog added if refresh token expired
+	// TODO 1. ugly 2. support re-login sequence once credentials dialog added if refresh token expired
 	for {
 		order, err := d.GetActiveOrder(context.Background())
 		if err == nil {
@@ -191,7 +191,7 @@ func (e errorResponse) Error() string {
 }
 
 func (c *HttpClient) sendRequest(req *http.Request, accessToken string, body interface{}) error {
-	if len(req.Header.Get("Content-Type")) == 0 {
+	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
 
@@ -220,7 +220,7 @@ func (c *HttpClient) sendRequest(req *http.Request, accessToken string, body int
 		}
 	}
 
-	if err = json.NewDecoder(res.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 		return err
 	}
 
