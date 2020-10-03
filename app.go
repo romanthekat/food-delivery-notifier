@@ -12,7 +12,7 @@ type App struct {
 }
 
 func newApp() *App {
-	//TODO replace with fyne dialog for user/password if needed
+	// TODO replace with fyne dialog for user/password if needed
 	username, usernameFound := syscall.Getenv("FDN_USERNAME")
 	password, passwordFound := syscall.Getenv("FDN_PASSWORD")
 
@@ -54,12 +54,13 @@ func (app *App) quit() {
 	systray.Quit()
 }
 
-func (app *App) showError(error string) {
-	if len(error) > 16 {
-		error = error[0:15]
+func (app *App) showError(err string) {
+	const MaxErrLength = 16
+	if len(err) > MaxErrLength {
+		err = err[0:15]
 	}
 
-	systray.SetTitle(error)
+	systray.SetTitle(err)
 }
 
 func (app *App) orderCreated() {
