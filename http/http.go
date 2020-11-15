@@ -17,7 +17,7 @@ type Client struct {
 	refreshUrl   string
 	accessToken  string
 	refreshToken string
-	c            *http.Client
+	httpClient   *http.Client
 }
 
 type Login struct {
@@ -41,18 +41,18 @@ func NewHttpClient(baseUrl, loginUrl, refreshUrl string) *Client {
 		BaseUrl:    baseUrl,
 		loginUrl:   loginUrl,
 		refreshUrl: refreshUrl,
-		c: &http.Client{
+		httpClient: &http.Client{
 			Timeout: time.Minute,
 		},
 	}
 }
 
-func (h *Client) Login(ctx context.Context, login *Login) (*LoginResponse, error) {
+func (c *Client) Login(ctx context.Context, login *Login) (*LoginResponse, error) {
 	jsonBytes, err := json.Marshal(login)
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodPost, h.BaseUrl+h.loginUrl, bytes.NewReader(jsonBytes))
+	req, err := http.NewRequest(http.MethodPost, c.BaseUrl+c.loginUrl, bytes.NewReader(jsonBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -60,21 +60,21 @@ func (h *Client) Login(ctx context.Context, login *Login) (*LoginResponse, error
 	req = req.WithContext(ctx)
 
 	res := LoginResponse{}
-	if err := h.SendRequest(req, &res); err != nil {
+	if err := c.SendRequest(req, &res); err != nil {
 		return nil, err
 	}
 
-	h.accessToken = res.AccessToken
-	h.refreshToken = res.RefreshToken
+	c.accessToken = res.AccessToken
+	c.refreshToken = res.RefreshToken
 
 	return &res, nil
 }
 
-func (h *Client) RefreshToken(ctx context.Context, refreshToken string) (*LoginResponse, error) {
+func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (*LoginResponse, error) {
 	form := url.Values{}
 	form.Add("refresh_token", refreshToken)
 
-	req, err := http.NewRequest(http.MethodPost, h.BaseUrl+h.refreshUrl, strings.NewReader(form.Encode()))
+	req, err := http.NewRequest(http.MethodPost, c.BaseUrl+c.refreshUrl, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -84,24 +84,24 @@ func (h *Client) RefreshToken(ctx context.Context, refreshToken string) (*LoginR
 	req = req.WithContext(ctx)
 
 	res := LoginResponse{}
-	if err := h.SendRequest(req, &res); err != nil {
+	if err := c.SendRequest(req, &res); err != nil {
 		return nil, err
 	}
 
 	return &res, nil
 }
 
-func (h *Client) SendRequest(req *http.Request, body interface{}) error {
+func (c *Client) SendRequest(req *http.Request, body interface{}) error {
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
 
 	for {
-		if len(h.accessToken) > 0 {
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.accessToken))
+		if len(c.accessToken) > 0 {
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
 		}
 
-		res, err := h.c.Do(req)
+		res, err := c.httpClient.Do(req)
 		if err != nil {
 			return err
 		}
@@ -117,14 +117,14 @@ func (h *Client) SendRequest(req *http.Request, body interface{}) error {
 		}
 
 		if res.StatusCode == http.StatusUnauthorized {
-			tokens, err := h.RefreshToken(context.Background(), h.refreshToken)
+			tokens, err := c.RefreshToken(context.Background(), c.refreshToken)
 			if err != nil {
 				fmt.Printf("error during refreshing token: %s\n", err)
 				return err
 			}
 
-			h.accessToken = tokens.AccessToken
-			h.refreshToken = tokens.RefreshToken
+			c.accessToken = tokens.AccessToken
+			c.refreshToken = tokens.RefreshToken
 
 			continue
 		}
