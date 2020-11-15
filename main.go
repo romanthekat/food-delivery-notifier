@@ -21,7 +21,7 @@ func main() {
 }
 
 type Delivery interface {
-	RefreshOrderStatus() (OrderStatus, error)
+	RefreshOrderStatus() (OrderStatus, string, error)
 }
 
 func (app *App) onReady() {

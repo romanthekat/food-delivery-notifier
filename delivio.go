@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -32,27 +33,50 @@ func NewDelivio(username, password string) (Delivery, error) {
 	return &Delivio{response.AccessToken, response.RefreshToken, client}, nil
 }
 
-func (d *Delivio) RefreshOrderStatus() (OrderStatus, error) {
+func (d *Delivio) RefreshOrderStatus() (OrderStatus, string, error) {
 	activeOrder, err := d.getActiveOrder()
 	if err != nil {
-		return noOrder, err
+		return noOrder, "", err
 	}
 
 	if activeOrder == nil {
-		return noOrder, nil
+		return noOrder, "", nil
 	}
 
+	courierCoor, err := d.getCourierCoor(activeOrder.Uuid)
+	if err != nil {
+		return noOrder, "", err
+	}
+
+	restInfo := activeOrder.Restaurant.Info
 	switch activeOrder.Status {
 	case 2:
-		return orderCreated, nil
+		return orderCreated, getDistance(restInfo.Lat, restInfo.Long,
+			courierCoor.Lat, courierCoor.Long), nil
 	case 4:
-		return orderCooking, nil
+		return orderCooking, getDistance(restInfo.Lat, restInfo.Long,
+			courierCoor.Lat, courierCoor.Long), nil
 	case 16:
-		return orderWaitingForDelivery, nil
+		return orderWaitingForDelivery, getDistance(restInfo.Lat, restInfo.Long,
+			courierCoor.Lat, courierCoor.Long), nil
 	case 12:
-		return orderDelivery, nil
+		return orderDelivery, getDistance(activeOrder.DestLat, activeOrder.DestLong,
+			courierCoor.Lat, courierCoor.Long), nil
 	default:
-		return noOrder, fmt.Errorf("unknown status for order %+v", activeOrder)
+		return noOrder, "", fmt.Errorf("unknown status for order %+v", activeOrder)
+	}
+}
+
+func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) string {
+	var distanceMeters = 3963.0 * math.Acos(math.Sin(float64(lat1))*math.Sin(float64(lat2))+
+		math.Cos(float64(lat1))*math.Cos(float64(lat2))*math.Cos(float64(long2-long1))) * 1.609344 * 1000
+
+	if distanceMeters > 1500 {
+		return ">30m"
+	} else if distanceMeters > 500 {
+		return "20m"
+	} else {
+		return "5m"
 	}
 }
 
@@ -94,6 +118,23 @@ type ActiveOrder struct {
 	Id     int    `json:"id"`
 	Uuid   string `json:"uuid"`
 	Status int    `json:"status"`
+
+	Restaurant Restaurant `json:"restaurant"`
+
+	DestLong float32 `json:"longitude"`
+	DestLat  float32 `json:"latitude"`
+}
+
+type Restaurant struct {
+	Id   string         `json:"@id"`
+	Type string         `json:"@type"`
+	Name string         `json:"name"`
+	Info RestaurantInfo `json:"info"`
+}
+
+type RestaurantInfo struct {
+	Long float32 `json:"longitude"`
+	Lat  float32 `json:"latitude"`
 }
 
 type Login struct {
@@ -104,6 +145,11 @@ type Login struct {
 type LoginResponse struct {
 	AccessToken  string `json:"token"`
 	RefreshToken string `json:"refresh_token"`
+}
+
+type CourierCoor struct {
+	Long float32 `json:"longitude"`
+	Lat  float32 `json:"latitude"`
 }
 
 func (c *HttpClient) Login(ctx context.Context, login *Login) (*LoginResponse, error) {
@@ -149,6 +195,24 @@ func (c *HttpClient) RefreshToken(ctx context.Context, refreshToken string) (*Lo
 	return &res, nil
 }
 
+func (c *HttpClient) GetCourierCoordinates(ctx context.Context, orderUuid string) ([]CourierCoor, error) {
+	req, err := http.NewRequest(http.MethodGet,
+		fmt.Sprintf("%s/be/api/order/%s/track", c.baseUrl, orderUuid), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Content-Type", "application/json")
+
+	req = req.WithContext(ctx)
+
+	var res []CourierCoor
+	if err := c.sendRequest(req, "", &res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	req, err := http.NewRequest(http.MethodGet,
 		fmt.Sprintf("%s/be/api/user/orders?orderby[created]=DESC&is_history_viewable=true&itemsPerPage=10&status[]=2&status[]=4&status[]=12&status[]=14&status[]=16",
@@ -172,6 +236,20 @@ func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	default:
 		return nil, fmt.Errorf("multiple active orders found %+v", res)
 	}
+}
+
+func (d *Delivio) getCourierCoor(orderUuid string) (*CourierCoor, error) {
+	coordinates, err := d.client.GetCourierCoordinates(context.Background(), orderUuid)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(coordinates) > 0 {
+		//TODO calculate average if coordinates differ
+		return &coordinates[0], nil
+	}
+
+	return nil, err
 }
 
 type HttpClient struct {

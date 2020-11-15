@@ -29,7 +29,7 @@ func newApp() *App {
 }
 
 func (app *App) refresh() {
-	orderStatus, err := app.activeDelivery.RefreshOrderStatus()
+	orderStatus, _, err := app.activeDelivery.RefreshOrderStatus()
 	if err != nil {
 		app.showError(err.Error())
 	}
