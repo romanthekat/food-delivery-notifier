@@ -66,7 +66,7 @@ func NewDelivio(username, password string) (core.Delivery, error) {
 	return &Delivio{client}, nil
 }
 
-func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, string, error) {
+func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, core.Title, error) {
 	activeOrder, err := d.getActiveOrder(context.Background())
 	if err != nil {
 		return core.NoOrder, "", err
@@ -143,7 +143,7 @@ func (d *Delivio) getCourierCoordinates(ctx context.Context, orderUuid string) (
 	return res, nil
 }
 
-func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) string {
+func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) core.Title {
 	//orthodromic distance
 	var distanceMeters = 3963.0 * 1.609344 * 1000 * math.Acos(math.Sin(float64(lat1))*math.Sin(float64(lat2))+
 		math.Cos(float64(lat1))*math.Cos(float64(lat2))*math.Cos(float64(long2-long1)))

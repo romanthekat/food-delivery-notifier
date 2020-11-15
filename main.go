@@ -6,6 +6,6 @@ import (
 )
 
 func main() {
-	app := app.NewApp()
-	systray.Run(app.OnReady, app.OnExit)
+	fdn := app.NewApp()
+	systray.Run(fdn.OnReady, fdn.OnExit)
 }

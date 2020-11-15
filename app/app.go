@@ -31,91 +31,6 @@ func NewApp() *App {
 	return &App{activeDelivery: delivery}
 }
 
-func (app *App) refresh() {
-	orderStatus, _, err := app.activeDelivery.RefreshOrderStatus()
-	if err != nil {
-		app.showError(err.Error())
-	}
-
-	switch orderStatus {
-	case core.NoOrder:
-		app.noOrder()
-	case core.OrderCreated:
-		app.orderCreated()
-	case core.OrderCooking:
-		app.orderCooking()
-	case core.OrderWaitingForDelivery:
-		app.orderWaitingForDelivery()
-	case core.OrderDelivery:
-		app.orderDelivery()
-	default:
-		panic(fmt.Sprintf("unknown order status detected: %v", orderStatus))
-	}
-}
-
-func (app *App) quit() {
-	systray.Quit()
-}
-
-func (app *App) showError(err string) {
-	const MaxErrLength = 16
-	if len(err) > MaxErrLength {
-		err = err[0:15]
-	}
-
-	systray.SetTitle(err)
-}
-
-func (app *App) orderCreated() {
-	systray.SetTooltip("order created")
-	systray.SetTitle("")
-	app.setIcon("icons/bag/red.png")
-}
-
-func (app *App) orderCooking() {
-	systray.SetTooltip("cooking")
-	systray.SetTitle("")
-	app.setIcon("icons/bag/yellow.png")
-}
-
-func (app *App) orderWaitingForDelivery() {
-	systray.SetTooltip("waiting for delivery")
-	systray.SetTitle("")
-	app.setIcon("icons/bag/yellow-green.png")
-}
-
-func (app *App) orderDelivery() {
-	systray.SetTooltip("in delivery")
-	systray.SetTitle("")
-	app.setIcon("icons/bag/green.png")
-}
-
-func (app *App) noOrder() {
-	systray.SetTooltip("no active order")
-	systray.SetTitle("")
-	app.setWhiteIcon()
-}
-
-func (app *App) setBlackIcon() {
-	app.setIcon("icons/bag/black.png")
-}
-
-func (app *App) setWhiteIcon() {
-	app.setIcon("icons/bag/white.png")
-}
-
-func (app *App) setIcon(icon string) {
-	systray.SetIcon(getIcon(icon))
-}
-
-func getIcon(s string) []byte {
-	b, err := ioutil.ReadFile(s)
-	if err != nil {
-		fmt.Print(err)
-	}
-	return b
-}
-
 func (app *App) OnReady() {
 	app.noOrder()
 	app.refresh()
@@ -144,4 +59,87 @@ func (app *App) OnReady() {
 }
 
 func (app *App) OnExit() {
+}
+
+func (app *App) refresh() {
+	orderStatus, title, err := app.activeDelivery.RefreshOrderStatus()
+	if err != nil {
+		app.showError(err.Error())
+	}
+
+	systray.SetTitle(string(title))
+
+	switch orderStatus {
+	case core.NoOrder:
+		app.noOrder()
+	case core.OrderCreated:
+		app.orderCreated()
+	case core.OrderCooking:
+		app.orderCooking()
+	case core.OrderWaitingForDelivery:
+		app.orderWaitingForDelivery()
+	case core.OrderDelivery:
+		app.orderDelivery()
+	default:
+		panic(fmt.Sprintf("unknown order status detected: %v", orderStatus))
+	}
+}
+
+func (app *App) quit() {
+	systray.Quit()
+}
+
+func (app *App) showError(err string) {
+	const MaxErrLength = 16
+	if len(err) > MaxErrLength {
+		err = err[0:15]
+	}
+
+	systray.SetTitle(err)
+	systray.SetTooltip(err)
+}
+
+func (app *App) orderCreated() {
+	systray.SetTooltip("order created")
+	app.setIcon("icons/bag/red.png")
+}
+
+func (app *App) orderCooking() {
+	systray.SetTooltip("cooking")
+	app.setIcon("icons/bag/yellow.png")
+}
+
+func (app *App) orderWaitingForDelivery() {
+	systray.SetTooltip("waiting for delivery")
+	app.setIcon("icons/bag/yellow-green.png")
+}
+
+func (app *App) orderDelivery() {
+	systray.SetTooltip("in delivery")
+	app.setIcon("icons/bag/green.png")
+}
+
+func (app *App) noOrder() {
+	systray.SetTooltip("no active order")
+	app.setWhiteIcon()
+}
+
+func (app *App) setBlackIcon() {
+	app.setIcon("icons/bag/black.png")
+}
+
+func (app *App) setWhiteIcon() {
+	app.setIcon("icons/bag/white.png")
+}
+
+func (app *App) setIcon(icon string) {
+	systray.SetIcon(getIcon(icon))
+}
+
+func getIcon(s string) []byte {
+	b, err := ioutil.ReadFile(s)
+	if err != nil {
+		fmt.Print(err)
+	}
+	return b
 }

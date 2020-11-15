@@ -11,5 +11,7 @@ const (
 )
 
 type Delivery interface {
-	RefreshOrderStatus() (OrderStatus, string, error)
+	RefreshOrderStatus() (OrderStatus, Title, error)
 }
+
+type Title string
