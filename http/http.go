@@ -12,7 +12,7 @@ import (
 )
 
 type Client struct {
-	BaseUrl      string
+	baseUrl      string
 	loginUrl     string
 	refreshUrl   string
 	accessToken  string
@@ -38,7 +38,7 @@ type ErrorResponse struct {
 
 func NewHttpClient(baseUrl, loginUrl, refreshUrl string) *Client {
 	return &Client{
-		BaseUrl:    baseUrl,
+		baseUrl:    baseUrl,
 		loginUrl:   loginUrl,
 		refreshUrl: refreshUrl,
 		httpClient: &http.Client{
@@ -52,7 +52,7 @@ func (c *Client) Login(ctx context.Context, login *Login) (*LoginResponse, error
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodPost, c.BaseUrl+c.loginUrl, bytes.NewReader(jsonBytes))
+	req, err := http.NewRequest(http.MethodPost, c.baseUrl+c.loginUrl, bytes.NewReader(jsonBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (*LoginR
 	form := url.Values{}
 	form.Add("refresh_token", refreshToken)
 
-	req, err := http.NewRequest(http.MethodPost, c.BaseUrl+c.refreshUrl, strings.NewReader(form.Encode()))
+	req, err := http.NewRequest(http.MethodPost, c.baseUrl+c.refreshUrl, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
