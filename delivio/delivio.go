@@ -61,19 +61,21 @@ type Orders struct {
 
 type HttpClient struct {
 	baseUrl      string
+	loginUrl     string
+	refreshUrl   string
 	accessToken  string
 	refreshToken string
 	client       *http.Client
 }
 
-type errorResponse struct {
+type ErrorResponse struct {
 	HttpCode int
 	Code     int    `json:"code"`
 	Message  string `json:"message"`
 }
 
 func NewDelivio(username, password string) (core.Delivery, error) {
-	client := NewHttpClient("https://delivio.by")
+	client := NewHttpClient("https://delivio.by", "/be/api/login", "/be/api/token/refresh")
 	response, err := client.Login(context.Background(), &Login{
 		Phone:    username,
 		Password: password,
@@ -84,15 +86,14 @@ func NewDelivio(username, password string) (core.Delivery, error) {
 
 	fmt.Printf("login response: %+v\n", response)
 
-	client.accessToken = response.AccessToken
-	client.refreshToken = response.RefreshToken
-
 	return &Delivio{client}, nil
 }
 
-func NewHttpClient(baseUrl string) *HttpClient {
+func NewHttpClient(baseUrl, loginUrl, refreshUrl string) *HttpClient {
 	return &HttpClient{
-		baseUrl: baseUrl,
+		baseUrl:    baseUrl,
+		loginUrl:   loginUrl,
+		refreshUrl: refreshUrl,
 		client: &http.Client{
 			Timeout: time.Minute,
 		},
@@ -144,7 +145,7 @@ func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	req = req.WithContext(ctx)
 
 	res := Orders{}
-	if err := d.client.sendRequest(req, &res); err != nil {
+	if err := d.client.SendRequest(req, &res); err != nil {
 		return nil, err
 	}
 
@@ -158,52 +159,9 @@ func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	}
 }
 
-func (c *HttpClient) Login(ctx context.Context, login *Login) (*LoginResponse, error) {
-	jsonBytes, err := json.Marshal(login)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodPost,
-		fmt.Sprintf("%s/be/api/login", c.baseUrl), bytes.NewReader(jsonBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	req = req.WithContext(ctx)
-
-	res := LoginResponse{}
-	if err := c.sendRequest(req, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
-}
-
-func (c *HttpClient) RefreshToken(ctx context.Context, refreshToken string) (*LoginResponse, error) {
-	form := url.Values{}
-	form.Add("refresh_token", refreshToken)
-
-	req, err := http.NewRequest(http.MethodPost,
-		fmt.Sprintf("%s/be/api/token/refresh", c.baseUrl), strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, err
-	}
-	req.PostForm = form
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	req = req.WithContext(ctx)
-
-	res := LoginResponse{}
-	if err := c.sendRequest(req, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
-}
-
-func (c *HttpClient) GetCourierCoordinates(ctx context.Context, orderUuid string) ([]CourierCoor, error) {
+func (d *Delivio) GetCourierCoordinates(ctx context.Context, orderUuid string) ([]CourierCoor, error) {
 	req, err := http.NewRequest(http.MethodGet,
-		fmt.Sprintf("%s/be/api/order/%s/track", c.baseUrl, orderUuid), nil)
+		fmt.Sprintf("%s/be/api/order/%s/track", d.client.baseUrl, orderUuid), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +170,7 @@ func (c *HttpClient) GetCourierCoordinates(ctx context.Context, orderUuid string
 	req = req.WithContext(ctx)
 
 	var res []CourierCoor
-	if err := c.sendRequest(req, &res); err != nil {
+	if err := d.client.SendRequest(req, &res); err != nil {
 		return nil, err
 	}
 
@@ -242,7 +200,7 @@ func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) strin
 }
 
 func (d *Delivio) getCourierCoor(orderUuid string) (*CourierCoor, error) {
-	coordinates, err := d.client.GetCourierCoordinates(context.Background(), orderUuid)
+	coordinates, err := d.GetCourierCoordinates(context.Background(), orderUuid)
 	if err != nil {
 		return nil, err
 	}
@@ -255,17 +213,61 @@ func (d *Delivio) getCourierCoor(orderUuid string) (*CourierCoor, error) {
 	return &coordinates[0], nil
 }
 
-func (c *HttpClient) sendRequest(req *http.Request, body interface{}) error {
+func (h *HttpClient) Login(ctx context.Context, login *Login) (*LoginResponse, error) {
+	jsonBytes, err := json.Marshal(login)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, h.baseUrl+h.loginUrl, bytes.NewReader(jsonBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	req = req.WithContext(ctx)
+
+	res := LoginResponse{}
+	if err := h.SendRequest(req, &res); err != nil {
+		return nil, err
+	}
+
+	h.accessToken = res.AccessToken
+	h.refreshToken = res.RefreshToken
+
+	return &res, nil
+}
+
+func (h *HttpClient) RefreshToken(ctx context.Context, refreshToken string) (*LoginResponse, error) {
+	form := url.Values{}
+	form.Add("refresh_token", refreshToken)
+
+	req, err := http.NewRequest(http.MethodPost, h.baseUrl+h.refreshUrl, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.PostForm = form
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	req = req.WithContext(ctx)
+
+	res := LoginResponse{}
+	if err := h.SendRequest(req, &res); err != nil {
+		return nil, err
+	}
+
+	return &res, nil
+}
+
+func (h *HttpClient) SendRequest(req *http.Request, body interface{}) error {
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
 
 	for {
-		if len(c.accessToken) > 0 {
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
+		if len(h.accessToken) > 0 {
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.accessToken))
 		}
 
-		res, err := c.client.Do(req)
+		res, err := h.client.Do(req)
 		if err != nil {
 			return err
 		}
@@ -281,26 +283,26 @@ func (c *HttpClient) sendRequest(req *http.Request, body interface{}) error {
 		}
 
 		if res.StatusCode == http.StatusUnauthorized {
-			tokens, err := c.RefreshToken(context.Background(), c.refreshToken)
+			tokens, err := h.RefreshToken(context.Background(), h.refreshToken)
 			if err != nil {
 				fmt.Printf("error during refreshing token: %s\n", err)
 				return err
 			}
 
-			c.accessToken = tokens.AccessToken
-			c.refreshToken = tokens.RefreshToken
+			h.accessToken = tokens.AccessToken
+			h.refreshToken = tokens.RefreshToken
 
 			continue
 		}
 
 		//TODO get rid of specific error response format
-		var errRes errorResponse
+		var errRes ErrorResponse
 		if err = json.NewDecoder(res.Body).Decode(&errRes); err == nil {
 			errRes.HttpCode = res.StatusCode
 			return errRes
 		}
 
-		return errorResponse{
+		return ErrorResponse{
 			HttpCode: res.StatusCode,
 			Code:     res.StatusCode,
 			Message:  "unknown error",
@@ -308,6 +310,6 @@ func (c *HttpClient) sendRequest(req *http.Request, body interface{}) error {
 	}
 }
 
-func (e errorResponse) Error() string {
+func (e ErrorResponse) Error() string {
 	return fmt.Sprintf("code: %v, message: %v", e.Code, e.Message)
 }
