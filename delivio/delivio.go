@@ -9,6 +9,12 @@ import (
 	"net/http"
 )
 
+const (
+	baseUrl    = "https://delivio.by"
+	loginUrl   = "/be/api/login"
+	refreshUrl = "/be/api/token/refresh"
+)
+
 type Delivio struct {
 	client *fdnHttp.Client
 }
@@ -46,7 +52,7 @@ type Orders struct {
 }
 
 func NewDelivio(username, password string) (core.Delivery, error) {
-	client := fdnHttp.NewHttpClient("https://delivio.by", "/be/api/login", "/be/api/token/refresh")
+	client := fdnHttp.NewHttpClient(baseUrl, loginUrl, refreshUrl)
 	response, err := client.Login(context.Background(), &fdnHttp.Login{
 		Phone:    username,
 		Password: password,
@@ -61,7 +67,7 @@ func NewDelivio(username, password string) (core.Delivery, error) {
 }
 
 func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, string, error) {
-	activeOrder, err := d.getActiveOrder()
+	activeOrder, err := d.getActiveOrder(context.Background())
 	if err != nil {
 		return core.NoOrder, "", err
 	}
@@ -94,10 +100,10 @@ func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, string, error) {
 	}
 }
 
-func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
+func (d *Delivio) getActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	req, err := http.NewRequest(http.MethodGet,
 		fmt.Sprintf("%s/be/api/user/orders?orderby[created]=DESC&is_history_viewable=true&itemsPerPage=10&status[]=2&status[]=4&status[]=12&status[]=14&status[]=16",
-			d.client.BaseUrl), nil)
+			baseUrl), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +127,7 @@ func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 
 func (d *Delivio) getCourierCoordinates(ctx context.Context, orderUuid string) ([]CourierCoor, error) {
 	req, err := http.NewRequest(http.MethodGet,
-		fmt.Sprintf("%s/be/api/order/%s/track", d.client.BaseUrl, orderUuid), nil)
+		fmt.Sprintf("%s/be/api/order/%s/track", baseUrl, orderUuid), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -137,18 +143,10 @@ func (d *Delivio) getCourierCoordinates(ctx context.Context, orderUuid string) (
 	return res, nil
 }
 
-func (d *Delivio) getActiveOrder() (*ActiveOrder, error) {
-	order, err := d.GetActiveOrder(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	return order, nil
-}
-
 func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) string {
-	var distanceMeters = 3963.0 * math.Acos(math.Sin(float64(lat1))*math.Sin(float64(lat2))+
-		math.Cos(float64(lat1))*math.Cos(float64(lat2))*math.Cos(float64(long2-long1))) * 1.609344 * 1000
+	//orthodromic distance
+	var distanceMeters = 3963.0 * 1.609344 * 1000 * math.Acos(math.Sin(float64(lat1))*math.Sin(float64(lat2))+
+		math.Cos(float64(lat1))*math.Cos(float64(lat2))*math.Cos(float64(long2-long1)))
 
 	if distanceMeters > 1500 {
 		return ">30m"
