@@ -1,20 +1,16 @@
 package delivio
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/EvilKhaosKat/food-delivery-notifier/core"
+	fdnHttp "github.com/EvilKhaosKat/food-delivery-notifier/http"
 	"math"
 	"net/http"
-	"net/url"
-	"strings"
-	"time"
 )
 
 type Delivio struct {
-	client *HttpClient
+	client *fdnHttp.Client
 }
 
 type ActiveOrder struct {
@@ -40,16 +36,6 @@ type RestaurantInfo struct {
 	Lat  float32 `json:"latitude"`
 }
 
-type Login struct {
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
-}
-
-type LoginResponse struct {
-	AccessToken  string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
-}
-
 type CourierCoor struct {
 	Long float32 `json:"longitude"`
 	Lat  float32 `json:"latitude"`
@@ -59,24 +45,9 @@ type Orders struct {
 	Orders []ActiveOrder `json:"hydra:member"`
 }
 
-type HttpClient struct {
-	baseUrl      string
-	loginUrl     string
-	refreshUrl   string
-	accessToken  string
-	refreshToken string
-	client       *http.Client
-}
-
-type ErrorResponse struct {
-	HttpCode int
-	Code     int    `json:"code"`
-	Message  string `json:"message"`
-}
-
 func NewDelivio(username, password string) (core.Delivery, error) {
-	client := NewHttpClient("https://delivio.by", "/be/api/login", "/be/api/token/refresh")
-	response, err := client.Login(context.Background(), &Login{
+	client := fdnHttp.NewHttpClient("https://delivio.by", "/be/api/login", "/be/api/token/refresh")
+	response, err := client.Login(context.Background(), &fdnHttp.Login{
 		Phone:    username,
 		Password: password,
 	})
@@ -87,17 +58,6 @@ func NewDelivio(username, password string) (core.Delivery, error) {
 	fmt.Printf("login response: %+v\n", response)
 
 	return &Delivio{client}, nil
-}
-
-func NewHttpClient(baseUrl, loginUrl, refreshUrl string) *HttpClient {
-	return &HttpClient{
-		baseUrl:    baseUrl,
-		loginUrl:   loginUrl,
-		refreshUrl: refreshUrl,
-		client: &http.Client{
-			Timeout: time.Minute,
-		},
-	}
 }
 
 func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, string, error) {
@@ -137,7 +97,7 @@ func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, string, error) {
 func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	req, err := http.NewRequest(http.MethodGet,
 		fmt.Sprintf("%s/be/api/user/orders?orderby[created]=DESC&is_history_viewable=true&itemsPerPage=10&status[]=2&status[]=4&status[]=12&status[]=14&status[]=16",
-			d.client.baseUrl), nil)
+			d.client.BaseUrl), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -159,9 +119,9 @@ func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	}
 }
 
-func (d *Delivio) GetCourierCoordinates(ctx context.Context, orderUuid string) ([]CourierCoor, error) {
+func (d *Delivio) getCourierCoordinates(ctx context.Context, orderUuid string) ([]CourierCoor, error) {
 	req, err := http.NewRequest(http.MethodGet,
-		fmt.Sprintf("%s/be/api/order/%s/track", d.client.baseUrl, orderUuid), nil)
+		fmt.Sprintf("%s/be/api/order/%s/track", d.client.BaseUrl, orderUuid), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +160,7 @@ func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) strin
 }
 
 func (d *Delivio) getCourierCoor(orderUuid string) (*CourierCoor, error) {
-	coordinates, err := d.GetCourierCoordinates(context.Background(), orderUuid)
+	coordinates, err := d.getCourierCoordinates(context.Background(), orderUuid)
 	if err != nil {
 		return nil, err
 	}
@@ -211,105 +171,4 @@ func (d *Delivio) getCourierCoor(orderUuid string) (*CourierCoor, error) {
 
 	//TODO calculate average if coordinates differ
 	return &coordinates[0], nil
-}
-
-func (h *HttpClient) Login(ctx context.Context, login *Login) (*LoginResponse, error) {
-	jsonBytes, err := json.Marshal(login)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodPost, h.baseUrl+h.loginUrl, bytes.NewReader(jsonBytes))
-	if err != nil {
-		return nil, err
-	}
-
-	req = req.WithContext(ctx)
-
-	res := LoginResponse{}
-	if err := h.SendRequest(req, &res); err != nil {
-		return nil, err
-	}
-
-	h.accessToken = res.AccessToken
-	h.refreshToken = res.RefreshToken
-
-	return &res, nil
-}
-
-func (h *HttpClient) RefreshToken(ctx context.Context, refreshToken string) (*LoginResponse, error) {
-	form := url.Values{}
-	form.Add("refresh_token", refreshToken)
-
-	req, err := http.NewRequest(http.MethodPost, h.baseUrl+h.refreshUrl, strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, err
-	}
-	req.PostForm = form
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	req = req.WithContext(ctx)
-
-	res := LoginResponse{}
-	if err := h.SendRequest(req, &res); err != nil {
-		return nil, err
-	}
-
-	return &res, nil
-}
-
-func (h *HttpClient) SendRequest(req *http.Request, body interface{}) error {
-	if req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", "application/json; charset=utf-8")
-	}
-
-	for {
-		if len(h.accessToken) > 0 {
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", h.accessToken))
-		}
-
-		res, err := h.client.Do(req)
-		if err != nil {
-			return err
-		}
-
-		defer res.Body.Close()
-
-		if res.StatusCode == http.StatusOK {
-			err := json.NewDecoder(res.Body).Decode(&body)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-
-		if res.StatusCode == http.StatusUnauthorized {
-			tokens, err := h.RefreshToken(context.Background(), h.refreshToken)
-			if err != nil {
-				fmt.Printf("error during refreshing token: %s\n", err)
-				return err
-			}
-
-			h.accessToken = tokens.AccessToken
-			h.refreshToken = tokens.RefreshToken
-
-			continue
-		}
-
-		//TODO get rid of specific error response format
-		var errRes ErrorResponse
-		if err = json.NewDecoder(res.Body).Decode(&errRes); err == nil {
-			errRes.HttpCode = res.StatusCode
-			return errRes
-		}
-
-		return ErrorResponse{
-			HttpCode: res.StatusCode,
-			Code:     res.StatusCode,
-			Message:  "unknown error",
-		}
-	}
-}
-
-func (e ErrorResponse) Error() string {
-	return fmt.Sprintf("code: %v, message: %v", e.Code, e.Message)
 }
