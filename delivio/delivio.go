@@ -14,9 +14,7 @@ import (
 )
 
 type Delivio struct {
-	accessToken  string
-	refreshToken string
-	client       *HttpClient
+	client *HttpClient
 }
 
 type ActiveOrder struct {
@@ -62,8 +60,10 @@ type Orders struct {
 }
 
 type HttpClient struct {
-	baseUrl string
-	client  *http.Client
+	baseUrl      string
+	accessToken  string
+	refreshToken string
+	client       *http.Client
 }
 
 type errorResponse struct {
@@ -84,7 +84,10 @@ func NewDelivio(username, password string) (core.Delivery, error) {
 
 	fmt.Printf("login response: %+v\n", response)
 
-	return &Delivio{response.AccessToken, response.RefreshToken, client}, nil
+	client.accessToken = response.AccessToken
+	client.refreshToken = response.RefreshToken
+
+	return &Delivio{client}, nil
 }
 
 func NewHttpClient(baseUrl string) *HttpClient {
@@ -141,7 +144,7 @@ func (d *Delivio) GetActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	req = req.WithContext(ctx)
 
 	res := Orders{}
-	if err := d.client.sendRequest(req, d.accessToken, &res); err != nil {
+	if err := d.client.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 
@@ -169,7 +172,7 @@ func (c *HttpClient) Login(ctx context.Context, login *Login) (*LoginResponse, e
 	req = req.WithContext(ctx)
 
 	res := LoginResponse{}
-	if err := c.sendRequest(req, "", &res); err != nil {
+	if err := c.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 
@@ -191,14 +194,14 @@ func (c *HttpClient) RefreshToken(ctx context.Context, refreshToken string) (*Lo
 	req = req.WithContext(ctx)
 
 	res := LoginResponse{}
-	if err := c.sendRequest(req, "", &res); err != nil {
+	if err := c.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 
 	return &res, nil
 }
 
-func (c *HttpClient) GetCourierCoordinates(ctx context.Context, accessToken string, orderUuid string) ([]CourierCoor, error) {
+func (c *HttpClient) GetCourierCoordinates(ctx context.Context, orderUuid string) ([]CourierCoor, error) {
 	req, err := http.NewRequest(http.MethodGet,
 		fmt.Sprintf("%s/be/api/order/%s/track", c.baseUrl, orderUuid), nil)
 	if err != nil {
@@ -208,9 +211,8 @@ func (c *HttpClient) GetCourierCoordinates(ctx context.Context, accessToken stri
 
 	req = req.WithContext(ctx)
 
-	//TODO handle expired token
 	var res []CourierCoor
-	if err := c.sendRequest(req, accessToken, &res); err != nil {
+	if err := c.sendRequest(req, &res); err != nil {
 		return nil, err
 	}
 
@@ -218,33 +220,12 @@ func (c *HttpClient) GetCourierCoordinates(ctx context.Context, accessToken stri
 }
 
 func (d *Delivio) getActiveOrder() (*ActiveOrder, error) {
-	// TODO 1. ugly 2. support re-login sequence once credentials dialog added in case refresh token expired
-	for {
-		order, err := d.GetActiveOrder(context.Background())
-		if err == nil {
-			return order, nil
-		}
-
-		response, ok := err.(errorResponse)
-		if !ok {
-			fmt.Printf("error during getting active order, unknown response: %s\n", err)
-			return nil, err
-		}
-
-		if response.HttpCode != http.StatusUnauthorized {
-			fmt.Printf("error during getting active order, unknown status: %s\n", err)
-			return nil, err
-		}
-
-		tokens, err := d.client.RefreshToken(context.Background(), d.refreshToken)
-		if err != nil {
-			fmt.Printf("error during refreshing token: %s\n", err)
-			return nil, err
-		}
-
-		d.accessToken = tokens.AccessToken
-		d.refreshToken = tokens.RefreshToken
+	order, err := d.GetActiveOrder(context.Background())
+	if err != nil {
+		return nil, err
 	}
+
+	return order, nil
 }
 
 func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) string {
@@ -261,7 +242,7 @@ func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) strin
 }
 
 func (d *Delivio) getCourierCoor(orderUuid string) (*CourierCoor, error) {
-	coordinates, err := d.client.GetCourierCoordinates(context.Background(), d.accessToken, orderUuid)
+	coordinates, err := d.client.GetCourierCoordinates(context.Background(), orderUuid)
 	if err != nil {
 		return nil, err
 	}
@@ -274,24 +255,45 @@ func (d *Delivio) getCourierCoor(orderUuid string) (*CourierCoor, error) {
 	return &coordinates[0], nil
 }
 
-//TODO handle expired access token here
-func (c *HttpClient) sendRequest(req *http.Request, accessToken string, body interface{}) error {
+func (c *HttpClient) sendRequest(req *http.Request, body interface{}) error {
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
 
-	if len(accessToken) > 0 {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	}
+	for {
+		if len(c.accessToken) > 0 {
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
+		}
 
-	res, err := c.client.Do(req)
-	if err != nil {
-		return err
-	}
+		res, err := c.client.Do(req)
+		if err != nil {
+			return err
+		}
 
-	defer res.Body.Close()
+		defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
+		if res.StatusCode == http.StatusOK {
+			err := json.NewDecoder(res.Body).Decode(&body)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+
+		if res.StatusCode == http.StatusUnauthorized {
+			tokens, err := c.RefreshToken(context.Background(), c.refreshToken)
+			if err != nil {
+				fmt.Printf("error during refreshing token: %s\n", err)
+				return err
+			}
+
+			c.accessToken = tokens.AccessToken
+			c.refreshToken = tokens.RefreshToken
+
+			continue
+		}
+
+		//TODO get rid of specific error response format
 		var errRes errorResponse
 		if err = json.NewDecoder(res.Body).Decode(&errRes); err == nil {
 			errRes.HttpCode = res.StatusCode
@@ -304,12 +306,6 @@ func (c *HttpClient) sendRequest(req *http.Request, accessToken string, body int
 			Message:  "unknown error",
 		}
 	}
-
-	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (e errorResponse) Error() string {
