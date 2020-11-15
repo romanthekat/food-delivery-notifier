@@ -1,10 +1,11 @@
-package main
+package delivio
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/EvilKhaosKat/food-delivery-notifier/core"
 	"math"
 	"net/http"
 	"net/url"
@@ -18,7 +19,7 @@ type Delivio struct {
 	client       *HttpClient
 }
 
-func NewDelivio(username, password string) (Delivery, error) {
+func NewDelivio(username, password string) (core.Delivery, error) {
 	client := NewHttpClient("https://delivio.by")
 	response, err := client.Login(context.Background(), &Login{
 		Phone:    username,
@@ -33,37 +34,37 @@ func NewDelivio(username, password string) (Delivery, error) {
 	return &Delivio{response.AccessToken, response.RefreshToken, client}, nil
 }
 
-func (d *Delivio) RefreshOrderStatus() (OrderStatus, string, error) {
+func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, string, error) {
 	activeOrder, err := d.getActiveOrder()
 	if err != nil {
-		return noOrder, "", err
+		return core.NoOrder, "", err
 	}
 
 	if activeOrder == nil {
-		return noOrder, "", nil
+		return core.NoOrder, "", nil
 	}
 
 	courierCoor, err := d.getCourierCoor(activeOrder.Uuid)
 	if err != nil {
-		return noOrder, "", err
+		return core.NoOrder, "", err
 	}
 
 	restInfo := activeOrder.Restaurant.Info
 	switch activeOrder.Status {
 	case 2:
-		return orderCreated, getDistance(restInfo.Lat, restInfo.Long,
+		return core.OrderCreated, getDistance(restInfo.Lat, restInfo.Long,
 			courierCoor.Lat, courierCoor.Long), nil
 	case 4:
-		return orderCooking, getDistance(restInfo.Lat, restInfo.Long,
+		return core.OrderCooking, getDistance(restInfo.Lat, restInfo.Long,
 			courierCoor.Lat, courierCoor.Long), nil
 	case 16:
-		return orderWaitingForDelivery, getDistance(restInfo.Lat, restInfo.Long,
+		return core.OrderWaitingForDelivery, getDistance(restInfo.Lat, restInfo.Long,
 			courierCoor.Lat, courierCoor.Long), nil
 	case 12:
-		return orderDelivery, getDistance(activeOrder.DestLat, activeOrder.DestLong,
+		return core.OrderDelivery, getDistance(activeOrder.DestLat, activeOrder.DestLong,
 			courierCoor.Lat, courierCoor.Long), nil
 	default:
-		return noOrder, "", fmt.Errorf("unknown status for order %+v", activeOrder)
+		return core.NoOrder, "", fmt.Errorf("unknown status for order %+v", activeOrder)
 	}
 }
 

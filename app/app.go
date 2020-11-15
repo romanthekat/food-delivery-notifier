@@ -1,18 +1,21 @@
-package main
+package app
 
 import (
 	"fmt"
+	"github.com/EvilKhaosKat/food-delivery-notifier/core"
+	"github.com/EvilKhaosKat/food-delivery-notifier/delivio"
 	"github.com/getlantern/systray"
 	"io/ioutil"
 	"syscall"
+	"time"
 )
 
 type App struct {
-	activeDelivery Delivery
+	activeDelivery core.Delivery
 }
 
-func newApp() *App {
-	// TODO replace with fyne dialog for user/password if needed
+func NewApp() *App {
+	// TODO replace with fyne or cli dialog for user/password if needed
 	username, usernameFound := syscall.Getenv("FDN_USERNAME")
 	password, passwordFound := syscall.Getenv("FDN_PASSWORD")
 
@@ -20,7 +23,7 @@ func newApp() *App {
 		panic("username or password not found in env: set FDN_USERNAME and FDN_PASSWORD")
 	}
 
-	delivery, err := NewDelivio(username, password)
+	delivery, err := delivio.NewDelivio(username, password)
 	if err != nil {
 		panic(err)
 	}
@@ -35,15 +38,15 @@ func (app *App) refresh() {
 	}
 
 	switch orderStatus {
-	case noOrder:
+	case core.NoOrder:
 		app.noOrder()
-	case orderCreated:
+	case core.OrderCreated:
 		app.orderCreated()
-	case orderCooking:
+	case core.OrderCooking:
 		app.orderCooking()
-	case orderWaitingForDelivery:
+	case core.OrderWaitingForDelivery:
 		app.orderWaitingForDelivery()
-	case orderDelivery:
+	case core.OrderDelivery:
 		app.orderDelivery()
 	default:
 		panic(fmt.Sprintf("unknown order status detected: %v", orderStatus))
@@ -111,4 +114,34 @@ func getIcon(s string) []byte {
 		fmt.Print(err)
 	}
 	return b
+}
+
+func (app *App) OnReady() {
+	app.noOrder()
+	app.refresh()
+
+	mRefresh := systray.AddMenuItem("Refresh", "Refresh order status")
+	systray.AddSeparator()
+
+	mQuit := systray.AddMenuItem("Quit", "Quit the whole app")
+
+	refreshTicker := time.NewTicker(60 * time.Second)
+
+	go func() {
+		for {
+			select {
+			case <-mRefresh.ClickedCh:
+				app.refresh()
+
+			case <-refreshTicker.C:
+				app.refresh()
+
+			case <-mQuit.ClickedCh:
+				app.quit()
+			}
+		}
+	}()
+}
+
+func (app *App) OnExit() {
 }
