@@ -64,6 +64,7 @@ func (app *App) OnExit() {
 func (app *App) refresh() {
 	orderStatus, title, err := app.activeDelivery.RefreshOrderStatus()
 	if err != nil {
+		fmt.Printf("%s", err)
 		app.showError(err.Error())
 	}
 
