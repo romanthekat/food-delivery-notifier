@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	baseUrl    = "https://delivio.by"
-	loginUrl   = "/be/api/login"
-	refreshUrl = "/be/api/token/refresh"
+	baseUrl       = "https://delivio.by"
+	loginUrl      = "/be/api/login"
+	refreshUrl    = "/be/api/token/refresh"
+	earthRadiusKm = 6371
 )
 
 type Delivio struct {
@@ -34,15 +35,14 @@ type Restaurant struct {
 	Id   string         `json:"@id"`
 	Type string         `json:"@type"`
 	Name string         `json:"name"`
-	Info RestaurantInfo `json:"info"`
+	Info RestaurantInfo `json:"Info"`
 }
 
 type RestaurantInfo struct {
-	Long float32 `json:"longitude"`
-	Lat  float32 `json:"latitude"`
+	Info Coor `json:"address"`
 }
 
-type CourierCoor struct {
+type Coor struct {
 	Long float32 `json:"longitude"`
 	Lat  float32 `json:"latitude"`
 }
@@ -82,19 +82,16 @@ func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, core.Title, error) {
 	}
 
 	restInfo := activeOrder.Restaurant.Info
+	restCoor := &Coor{restInfo.Info.Long, restInfo.Info.Lat}
 	switch activeOrder.Status {
 	case 2:
-		return core.OrderCreated, getDistance(restInfo.Lat, restInfo.Long,
-			courierCoor.Lat, courierCoor.Long), nil
+		return core.OrderCreated, getDistance(restCoor, courierCoor), nil
 	case 4:
-		return core.OrderCooking, getDistance(restInfo.Lat, restInfo.Long,
-			courierCoor.Lat, courierCoor.Long), nil
+		return core.OrderCooking, getDistance(restCoor, courierCoor), nil
 	case 16:
-		return core.OrderWaitingForDelivery, getDistance(restInfo.Lat, restInfo.Long,
-			courierCoor.Lat, courierCoor.Long), nil
+		return core.OrderWaitingForDelivery, getDistance(restCoor, courierCoor), nil
 	case 12:
-		return core.OrderDelivery, getDistance(activeOrder.DestLat, activeOrder.DestLong,
-			courierCoor.Lat, courierCoor.Long), nil
+		return core.OrderDelivery, getDistance(&Coor{activeOrder.DestLong, activeOrder.DestLat}, courierCoor), nil
 	default:
 		return core.NoOrder, "", fmt.Errorf("unknown status for order %+v", activeOrder)
 	}
@@ -125,7 +122,7 @@ func (d *Delivio) getActiveOrder(ctx context.Context) (*ActiveOrder, error) {
 	}
 }
 
-func (d *Delivio) getCourierCoordinates(ctx context.Context, orderUuid string) ([]CourierCoor, error) {
+func (d *Delivio) getCourierCoordinates(ctx context.Context, orderUuid string) ([]Coor, error) {
 	req, err := http.NewRequest(http.MethodGet,
 		fmt.Sprintf("%s/be/api/order/%s/track", baseUrl, orderUuid), nil)
 	if err != nil {
@@ -135,7 +132,7 @@ func (d *Delivio) getCourierCoordinates(ctx context.Context, orderUuid string) (
 
 	req = req.WithContext(ctx)
 
-	var res []CourierCoor
+	var res []Coor
 	if err := d.client.SendRequest(req, &res); err != nil {
 		return nil, err
 	}
@@ -143,10 +140,30 @@ func (d *Delivio) getCourierCoordinates(ctx context.Context, orderUuid string) (
 	return res, nil
 }
 
-func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) core.Title {
-	//orthodromic distance
-	var distanceMeters = 3963.0 * 1.609344 * 1000 * math.Acos(math.Sin(float64(lat1))*math.Sin(float64(lat2))+
-		math.Cos(float64(lat1))*math.Cos(float64(lat2))*math.Cos(float64(long2-long1)))
+func getDistance(coor1, coor2 *Coor) core.Title {
+	if coor1 == nil || coor2 == nil {
+		return "no coordinates"
+	}
+
+	fmt.Printf("coor1:%+v, coor2: %+v\n", coor1, coor2)
+
+	//haversine formula
+	lat1 := toRadians(coor1.Lat)
+	lon1 := toRadians(coor1.Long)
+	lat2 := toRadians(coor2.Lat)
+	lon2 := toRadians(coor2.Long)
+
+	deltaLat := lat2 - lat1
+	deltaLong := lon2 - lon1
+
+	a := math.Sin(float64(deltaLat/2))*math.Sin(float64(deltaLat/2)) + math.Cos(float64(lat1))*math.Cos(float64(lat2))*
+		math.Sin(float64(deltaLong/2))*math.Sin(float64(deltaLong/2))
+
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	distanceMeters := c * earthRadiusKm * 1000
+
+	fmt.Printf("distance: %f\n", distanceMeters)
 
 	if distanceMeters > 1500 {
 		return ">30m"
@@ -157,14 +174,18 @@ func getDistance(lat1 float32, long1 float32, lat2 float32, long2 float32) core.
 	}
 }
 
-func (d *Delivio) getCourierCoor(orderUuid string) (*CourierCoor, error) {
+func toRadians(d float32) float32 {
+	return d * math.Pi / 180
+}
+
+func (d *Delivio) getCourierCoor(orderUuid string) (*Coor, error) {
 	coordinates, err := d.getCourierCoordinates(context.Background(), orderUuid)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(coordinates) == 0 {
-		return nil, fmt.Errorf("courier coordinates are empty")
+		return nil, nil
 	}
 
 	//TODO calculate average if coordinates differ
