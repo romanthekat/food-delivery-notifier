@@ -129,7 +129,7 @@ func (c *Client) SendRequest(req *http.Request, body interface{}) error {
 			continue
 		}
 
-		//TODO get rid of specific error response format
+		//TODO get rid of specific error response format, return whole body
 		var errRes ErrorResponse
 		if err = json.NewDecoder(res.Body).Decode(&errRes); err == nil {
 			errRes.HttpCode = res.StatusCode
@@ -139,7 +139,7 @@ func (c *Client) SendRequest(req *http.Request, body interface{}) error {
 		return ErrorResponse{
 			HttpCode: res.StatusCode,
 			Code:     res.StatusCode,
-			Message:  "unknown error",
+			Message:  "unknown error\n",
 		}
 	}
 }

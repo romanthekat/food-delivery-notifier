@@ -39,7 +39,7 @@ type Restaurant struct {
 }
 
 type RestaurantInfo struct {
-	Info Coor `json:"address"`
+	Address Coor `json:"address"`
 }
 
 type Coor struct {
@@ -81,20 +81,34 @@ func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, core.Title, error) {
 		return core.NoOrder, "", err
 	}
 
-	restInfo := activeOrder.Restaurant.Info
-	restCoor := &Coor{restInfo.Info.Long, restInfo.Info.Lat}
+	restCoor := &Coor{activeOrder.Restaurant.Info.Address.Long, activeOrder.Restaurant.Info.Address.Lat}
+	destCoor := &Coor{activeOrder.DestLong, activeOrder.DestLat}
+
 	switch activeOrder.Status {
 	case 2:
-		return core.OrderCreated, getDistance(restCoor, courierCoor), nil
+		return core.OrderCreated, getTitle(courierCoor, restCoor), nil
 	case 4:
-		return core.OrderCooking, getDistance(restCoor, courierCoor), nil
+		return core.OrderCooking, getTitle(courierCoor, restCoor), nil
 	case 16:
-		return core.OrderWaitingForDelivery, getDistance(restCoor, courierCoor), nil
+		return core.OrderWaitingForDelivery, getTitle(courierCoor, restCoor), nil
 	case 12:
-		return core.OrderDelivery, getDistance(&Coor{activeOrder.DestLong, activeOrder.DestLat}, courierCoor), nil
+		return core.OrderDelivery, getTitle(courierCoor, destCoor), nil
 	default:
 		return core.NoOrder, "", fmt.Errorf("unknown status for order %+v", activeOrder)
 	}
+}
+
+func getTitle(courier, dest *Coor) core.Title {
+	if courier == nil {
+		return "no courier"
+	}
+
+	title, err := getDistance(courier, dest)
+	if err != nil {
+		return core.Title(err.Error())
+	}
+
+	return title
 }
 
 func (d *Delivio) getActiveOrder(ctx context.Context) (*ActiveOrder, error) {
@@ -140,9 +154,9 @@ func (d *Delivio) getCourierCoordinates(ctx context.Context, orderUuid string) (
 	return res, nil
 }
 
-func getDistance(coor1, coor2 *Coor) core.Title {
+func getDistance(coor1, coor2 *Coor) (core.Title, error) {
 	if coor1 == nil || coor2 == nil {
-		return "no coordinates"
+		return "", fmt.Errorf("both coordinates must be provided")
 	}
 
 	fmt.Printf("coor1:%+v, coor2: %+v\n", coor1, coor2)
@@ -166,11 +180,11 @@ func getDistance(coor1, coor2 *Coor) core.Title {
 	fmt.Printf("distance: %f\n", distanceMeters)
 
 	if distanceMeters > 1500 {
-		return ">30m"
+		return ">30m", nil
 	} else if distanceMeters > 500 {
-		return "20m"
+		return "20m", nil
 	} else {
-		return "5m"
+		return "5m", nil
 	}
 }
 
