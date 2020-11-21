@@ -8,7 +8,9 @@ import (
 )
 
 type logData struct {
-	restaurantId, status, restCoor, destCoor, courierCoor string
+	restaurantId, status            string
+	totalPrice                      float32
+	restCoor, destCoor, courierCoor string
 }
 
 func writeLogs(data *logData) {
@@ -22,6 +24,7 @@ func writeLogs(data *logData) {
 		time.Now().Format("2006-01-02 15:04:05"),
 		data.restaurantId,
 		data.status,
+		fmt.Sprintf("%f", data.totalPrice),
 		data.restCoor,
 		data.destCoor,
 		data.courierCoor,

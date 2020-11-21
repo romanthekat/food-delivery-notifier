@@ -26,6 +26,8 @@ type ActiveOrder struct {
 	Uuid     string `json:"uuid"`
 	StatusId int    `json:"status"`
 
+	TotalPrice float32 `json:"totalPrice"`
+
 	Restaurant Restaurant `json:"restaurant"`
 
 	DestLong float32 `json:"longitude"`
@@ -77,6 +79,7 @@ func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, core.Title, error) {
 		writeLogs(&logData{
 			restaurantId: "",
 			status:       "",
+			totalPrice:   0.0,
 			restCoor:     "",
 			destCoor:     "",
 			courierCoor:  "",
@@ -105,6 +108,7 @@ func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, core.Title, error) {
 	writeLogs(&logData{
 		restaurantId: activeOrder.Restaurant.Id,
 		status:       strconv.Itoa(int(status)),
+		totalPrice:   activeOrder.TotalPrice,
 		restCoor:     fmt.Sprintf("%+v", restCoor),
 		destCoor:     fmt.Sprintf("%+v", destCoor),
 		courierCoor:  fmt.Sprintf("%+v", courierCoor),
