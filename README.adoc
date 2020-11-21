@@ -11,6 +11,15 @@ image::examples/1.png[128,128,float="left"]
 image::examples/2.png[128,128,float="left"]
 image::examples/3.png[128,128]
 
+== link:notebook.ipynb[Jupyter notebook]
+Notebook with delivery time assessment, to make a prediction how fast food will be delivered.
+[source]
+----
+conda activate base
+pip3 install sklearn matplotlib geopandas
+jupyter notebook
+----
+
 == Supported services
 
 TBD

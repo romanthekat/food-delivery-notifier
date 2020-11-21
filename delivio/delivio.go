@@ -7,6 +7,7 @@ import (
 	fdnHttp "github.com/EvilKhaosKat/food-delivery-notifier/http"
 	"math"
 	"net/http"
+	"strconv"
 )
 
 const (
@@ -21,9 +22,9 @@ type Delivio struct {
 }
 
 type ActiveOrder struct {
-	Id     int    `json:"id"`
-	Uuid   string `json:"uuid"`
-	Status int    `json:"status"`
+	Id       int    `json:"id"`
+	Uuid     string `json:"uuid"`
+	StatusId int    `json:"status"`
 
 	Restaurant Restaurant `json:"restaurant"`
 
@@ -73,6 +74,13 @@ func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, core.Title, error) {
 	}
 
 	if activeOrder == nil {
+		writeLogs(&logData{
+			restaurantId: "",
+			status:       "",
+			restCoor:     "",
+			destCoor:     "",
+			courierCoor:  "",
+		})
 		return core.NoOrder, "", nil
 	}
 
@@ -84,17 +92,54 @@ func (d *Delivio) RefreshOrderStatus() (core.OrderStatus, core.Title, error) {
 	restCoor := &Coor{activeOrder.Restaurant.Info.Address.Long, activeOrder.Restaurant.Info.Address.Lat}
 	destCoor := &Coor{activeOrder.DestLong, activeOrder.DestLat}
 
-	switch activeOrder.Status {
-	case 2:
-		return core.OrderCreated, getTitle(courierCoor, restCoor), nil
-	case 4:
-		return core.OrderCooking, getTitle(courierCoor, restCoor), nil
-	case 16:
-		return core.OrderWaitingForDelivery, getTitle(courierCoor, restCoor), nil
-	case 12:
-		return core.OrderDelivery, getTitle(courierCoor, destCoor), nil
+	status, err := getStatusById(activeOrder.StatusId)
+	if err != nil {
+		return core.NoOrder, "", err
+	}
+
+	title, err := getTitleByStatus(status, restCoor, destCoor, courierCoor)
+	if err != nil {
+		return status, "", err
+	}
+
+	writeLogs(&logData{
+		restaurantId: activeOrder.Restaurant.Id,
+		status:       strconv.Itoa(int(status)),
+		restCoor:     fmt.Sprintf("%+v", restCoor),
+		destCoor:     fmt.Sprintf("%+v", destCoor),
+		courierCoor:  fmt.Sprintf("%+v", courierCoor),
+	})
+
+	return status, title, nil
+}
+
+func getTitleByStatus(status core.OrderStatus, restCoor, destCoor, courierCoor *Coor) (core.Title, error) {
+	switch status {
+	case core.OrderCreated:
+		return getTitle(courierCoor, restCoor), nil
+	case core.OrderCooking:
+		return getTitle(courierCoor, restCoor), nil
+	case core.OrderWaitingForDelivery:
+		return getTitle(courierCoor, restCoor), nil
+	case core.OrderDelivery:
+		return getTitle(courierCoor, destCoor), nil
 	default:
-		return core.NoOrder, "", fmt.Errorf("unknown status for order %+v", activeOrder)
+		return "", fmt.Errorf("unknown status for status %+v", status)
+	}
+}
+
+func getStatusById(status int) (core.OrderStatus, error) {
+	switch status {
+	case 2:
+		return core.OrderCreated, nil
+	case 4:
+		return core.OrderCooking, nil
+	case 16:
+		return core.OrderWaitingForDelivery, nil
+	case 12:
+		return core.OrderDelivery, nil
+	default:
+		return core.NoOrder, fmt.Errorf("unknown status for order %+v", status)
 	}
 }
 
