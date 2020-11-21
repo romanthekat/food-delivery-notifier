@@ -16,7 +16,7 @@ Notebook with delivery time assessment, to make a prediction how fast food will 
 [source]
 ----
 conda activate base
-pip3 install sklearn matplotlib geopandas
+pip3 install sklearn matplotlib geopandas descartes
 jupyter notebook
 ----
 
