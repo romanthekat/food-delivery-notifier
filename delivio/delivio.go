@@ -42,7 +42,7 @@ type Restaurant struct {
 }
 
 type RestaurantInfo struct {
-	Address Coor `json:"address"`
+	Address *Coor `json:"address"`
 }
 
 type Coor struct {
