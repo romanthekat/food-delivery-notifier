@@ -26,6 +26,6 @@ TBD
 
 == Build
 
-`go build github.com/EvilKhaosKat/food-delivery-notifier`
+`go build github.com/romanthekat/food-delivery-notifier`
 or
-`go install github.com/EvilKhaosKat/food-delivery-notifier`
+`go install github.com/romanthekat/food-delivery-notifier`

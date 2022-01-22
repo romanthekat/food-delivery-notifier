@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/EvilKhaosKat/food-delivery-notifier/app"
+	"github.com/romanthekat/food-delivery-notifier/app"
 	"github.com/getlantern/systray"
 )
 

@@ -2,8 +2,8 @@ package app
 
 import (
 	"fmt"
-	"github.com/EvilKhaosKat/food-delivery-notifier/core"
-	"github.com/EvilKhaosKat/food-delivery-notifier/delivio"
+	"github.com/romanthekat/food-delivery-notifier/core"
+	"github.com/romanthekat/food-delivery-notifier/delivio"
 	"github.com/getlantern/systray"
 	"io/ioutil"
 	"syscall"

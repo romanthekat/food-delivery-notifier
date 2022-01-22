@@ -3,8 +3,8 @@ package delivio
 import (
 	"context"
 	"fmt"
-	"github.com/EvilKhaosKat/food-delivery-notifier/core"
-	fdnHttp "github.com/EvilKhaosKat/food-delivery-notifier/http"
+	"github.com/romanthekat/food-delivery-notifier/core"
+	fdnHttp "github.com/romanthekat/food-delivery-notifier/http"
 	"math"
 	"net/http"
 	"strconv"

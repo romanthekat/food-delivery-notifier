@@ -1,4 +1,4 @@
-module github.com/EvilKhaosKat/food-delivery-notifier
+module github.com/romanthekat/food-delivery-notifier
 
 go 1.15
 
